@@ -1,8 +1,12 @@
 use rand::Rng;
+use std::thread;
+use std::sync::mpsc;
+
 
 // CONSTANTS:
-const SIMULATIONS: usize = 1000000000;
+const SIMULATIONS: usize = 10_000_000;
 const N_DECKS: u32 = 4;
+const N_THREADS: usize = 10;
 
 
 fn shuffle_deck(deck: &mut Vec<u32>, rng: &mut rand::prelude::ThreadRng) {
@@ -45,7 +49,7 @@ fn sum(deck: &Vec<u32>) -> u32 {
 }
 
 
-fn main() {
+fn simulate_games(n_games: usize) -> [usize; 3] {
     let mut deck: Vec<u32> = Vec::new();
 
     reset_deck(&mut deck);
@@ -59,9 +63,9 @@ fn main() {
     let mut d_wins: usize = 0;
     let mut ties: usize = 0;
 
-    for match_n in 0..SIMULATIONS {
+    for match_n in 0..n_games {
         if deck.len() < (N_DECKS * 4 * 13) as usize / 4 {
-            println!("Working on match: {} / {} = {:.2}%", match_n, SIMULATIONS, (match_n as f64 / SIMULATIONS as f64) * 100.0);
+            println!("Working on match: {} / {} = {:.2}%", match_n, n_games, (match_n as f64 / n_games as f64) * 100.0);
 
             reset_deck(&mut deck);
             shuffle_deck(&mut deck, &mut rng);
@@ -80,7 +84,7 @@ fn main() {
 
             p_deck_sum = sum(&p_deck);
 
-            if p_deck_sum > 17 {
+            if p_deck_sum > 16 {
                 break
             }
         }
@@ -122,23 +126,50 @@ fn main() {
 
         // check for winner
         if d_deck_sum > 21 {
-            // println!("Player wins!");
             p_wins += 1;
         } else if p_deck_sum == d_deck_sum {
-            // println!("Tie...");
             ties += 1;
         } else if p_deck_sum > 21 {
-            // println!("Dealer wins...");
             d_wins += 1;
         } else if p_deck_sum > d_deck_sum {
-            // println!("Player wins!");
             p_wins += 1;
         } else if d_deck_sum > p_deck_sum {
-            // println!("Dealer wins...");
             d_wins += 1;
         }
+    }
 
-        // println!("Player deck: {:?} {}\nDealer deck: {:?} {}\n", p_deck, p_deck_sum, d_deck, d_deck_sum);
+    [p_wins, ties, d_wins]
+}
+
+
+fn main() {
+    // thread communication
+    let (tx, rx) = mpsc::channel::<[usize; 3]>();
+
+    for _n in 0..N_THREADS {
+        let tx1 = tx.clone();
+        thread::spawn(move || {
+            let result: [usize; 3] = simulate_games(SIMULATIONS / N_THREADS);
+            tx1.send(result).unwrap();
+        });
+    }
+
+    let mut p_wins: usize = 0;
+    let mut ties: usize = 0;
+    let mut d_wins: usize = 0;
+
+    let mut recieved_messages = 0;
+    for message in rx {
+        println!("{:?}", message);
+
+        p_wins += message[0];
+        ties += message[1];
+        d_wins += message[2];
+
+        recieved_messages += 1;
+        if recieved_messages == N_THREADS {
+            break;
+        }
     }
 
     let win_percentage = (p_wins as f64 / SIMULATIONS as f64) * 100.0;
