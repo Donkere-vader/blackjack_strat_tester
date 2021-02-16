@@ -3,7 +3,7 @@
 version = 3
 
 [[package]]
-name = "black_jack_strat_tester"
+name = "blackjack_strat_tester"
 version = "0.1.0"
 dependencies = [
  "rand",
